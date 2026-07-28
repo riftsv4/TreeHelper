@@ -224,17 +224,9 @@ public class HotmScanner {
                     + " Path to HOTM.", ChatFormatting.YELLOW);
         }
 
-        // Grind-progression advice (once, persisted): reaching HOTM 7 unlocks the powder meta —
-        // recommend starting Gemstone. (The powder milestones live in PowderTracker.)
-        if (config.grindAdvice && !config.advisedGemstoneStart && tier >= MIN_POWDER_TIER) {
-            config.advisedGemstoneStart = true;
-            config.save();
-            if (grind != Progression.GEMSTONE) {
-                ChatUtil.send("You've reached HOTM " + tier + " — we recommend starting the"
-                        + " Gemstone powder grind (set your Path to Gemstone).",
-                        ChatFormatting.GOLD);
-            }
-        }
+        // Grind-progression advice (HOTM 7 -> start Gemstone, powder milestones) — the tier
+        // just changed, so re-evaluate immediately rather than waiting for the tab poll.
+        powder.checkGrindAdvice();
     }
 
     /** One {@code - Label: value} mining-data line (gray label, gold value). */

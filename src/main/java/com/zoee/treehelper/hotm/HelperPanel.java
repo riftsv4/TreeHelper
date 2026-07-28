@@ -62,8 +62,8 @@ public final class HelperPanel {
     private static final int GREEN = 0xFF5CFF8A;
     private static final int RED = 0xFFFF6A6A;
 
-    /** Re-notify choices in seconds; 0 = once per step. */
-    private static final int[] RENOTIFY_CHOICES = {0, 30, 60, 300, 600};
+    /** Repeat-interval choices in seconds (used by anything set to Repeat). */
+    private static final int[] RENOTIFY_CHOICES = {30, 60, 300, 600};
 
     // Color picker layout.
     private static final int SV_SIZE = 60;   // saturation/value square
@@ -147,12 +147,12 @@ public final class HelperPanel {
         }
         if (notifOpen) {
             if (hit("nopt:ready", mx, my)) {
-                config.chatNotifications = !config.chatNotifications;
+                config.upgradeNotify = nextMode(config.upgradeNotify);
                 config.save();
-                return true; // stays open so several toggles can be flipped in a row
+                return true; // stays open so several settings can be cycled in a row
             }
             if (hit("nopt:advice", mx, my)) {
-                config.grindAdvice = !config.grindAdvice;
+                config.adviceNotify = nextMode(config.adviceNotify);
                 config.save();
                 return true;
             }
@@ -256,9 +256,33 @@ public final class HelperPanel {
     }
 
     private static String renotifyLabel(int seconds) {
-        if (seconds <= 0) return "Once";
         if (seconds < 60) return seconds + "s";
         return (seconds / 60) + "m";
+    }
+
+    /** Cycles a notification type's mode: Once -> Repeat -> Off -> Once. */
+    private static TreeConfig.NotifyMode nextMode(TreeConfig.NotifyMode mode) {
+        return switch (mode) {
+            case ONCE -> TreeConfig.NotifyMode.REPEAT;
+            case REPEAT -> TreeConfig.NotifyMode.OFF;
+            default -> TreeConfig.NotifyMode.ONCE;
+        };
+    }
+
+    private static String modeLabel(TreeConfig.NotifyMode mode) {
+        return switch (mode) {
+            case ONCE -> "Once";
+            case REPEAT -> "Repeat";
+            default -> "Off";
+        };
+    }
+
+    private int modeColor(TreeConfig.NotifyMode mode) {
+        return switch (mode) {
+            case ONCE -> GREEN;
+            case REPEAT -> GOLD;
+            default -> RED;
+        };
     }
 
     // --- path-change popup --------------------------------------------------
@@ -527,11 +551,11 @@ public final class HelperPanel {
         ry += ROW_H;
 
         gfx.text(font, "Notifications:", tx, ry + 2, GRAY);
-        rightText(gfx, font, notifSummary() + " v", right, ry + 2, WHITE);
+        rightText(gfx, font, "Edit v", right, ry + 2, WHITE);
         hits.put("nd", rowRect(ry));
         ry += ROW_H;
 
-        gfx.text(font, "Re-notify:", tx, ry + 2, GRAY);
+        gfx.text(font, "Repeat every:", tx, ry + 2, GRAY);
         rightText(gfx, font, renotifyLabel(config.renotifySeconds), right, ry + 2, WHITE);
         hits.put("t.renotify", rowRect(ry));
         ry += ROW_H;
@@ -584,32 +608,28 @@ public final class HelperPanel {
         hits.put(id, new int[]{x, y, 10, 10});
     }
 
-    /** Short state of the two notification types for the closed Notifications row. */
-    private String notifSummary() {
-        if (config.chatNotifications && config.grindAdvice) return "All";
-        if (!config.chatNotifications && !config.grindAdvice) return "Off";
-        return "Some";
-    }
-
-    /** The open Notifications dropdown: one ON/OFF toggle row per notification type. */
+    /**
+     * The open Notifications dropdown: one row per notification type, each click cycling its
+     * mode Once -> Repeat -> Off (Repeat uses the "Repeat every" interval).
+     */
     private void drawNotifDropdown(GuiGraphicsExtractor gfx, Font font) {
         int[] anchor = hits.get("nd");
         if (anchor == null) return;
-        int w = 96;
+        int w = PANEL_W - 2 * PAD;
         int x = settingsX + PANEL_W - PAD - w;
         int y = anchor[1] + ROW_H;
         int h = 2 * ROW_H + 2;
         gfx.fillGradient(x, y, x + w, y + h, 0xF8181820, 0xF8202030);
         outline(gfx, x, y, w, h, GOLD);
 
-        notifOption(gfx, font, x, y + 1, w, "Upgrade ready", config.chatNotifications, "nopt:ready");
-        notifOption(gfx, font, x, y + 1 + ROW_H, w, "Grind advice", config.grindAdvice, "nopt:advice");
+        notifOption(gfx, font, x, y + 1, w, "Upgrade ready", config.upgradeNotify, "nopt:ready");
+        notifOption(gfx, font, x, y + 1 + ROW_H, w, "Grind advice", config.adviceNotify, "nopt:advice");
     }
 
     private void notifOption(GuiGraphicsExtractor gfx, Font font, int x, int y, int w,
-                             String label, boolean on, String id) {
+                             String label, TreeConfig.NotifyMode mode, String id) {
         gfx.text(font, label, x + 4, y + 3, WHITE);
-        rightText(gfx, font, on ? "ON" : "OFF", x + w - 4, y + 3, on ? GREEN : RED);
+        rightText(gfx, font, modeLabel(mode), x + w - 4, y + 3, modeColor(mode));
         hits.put(id, new int[]{x, y, w, ROW_H});
     }
 

@@ -51,11 +51,17 @@ public class TreeConfig {
     /** Show the Powder Helper GUI (per-powder cards: balance / next step / progress). */
     public boolean powderHelperEnabled = true;
 
-    /** Send "you can afford the next step" chat notifications. */
-    public boolean chatNotifications = true;
+    /** How a notification type behaves: silent, announce once, or re-announce on an interval. */
+    public enum NotifyMode { OFF, ONCE, REPEAT }
 
-    /** Send grind-progression advice ("you hit HOTM 7 — start Gemstone", threshold moves). */
-    public boolean grindAdvice = true;
+    /** "You can afford the next step" notifications. REPEAT re-pings while it stays affordable. */
+    public NotifyMode upgradeNotify = NotifyMode.ONCE;
+
+    /**
+     * Grind-progression advice ("you hit HOTM 7 — start Gemstone", powder milestones).
+     * REPEAT re-reminds on the interval until the recommended path is actually selected.
+     */
+    public NotifyMode adviceNotify = NotifyMode.ONCE;
 
     /**
      * Fire-once flags for the grind-progression advice, so each recommendation is only ever
@@ -66,8 +72,8 @@ public class TreeConfig {
     public boolean advisedMithrilMove = false;
     public boolean advisedGlaciteStart = false;
 
-    /** Re-announce an affordable step every N seconds; 0 = only once per step. */
-    public int renotifySeconds = 0;
+    /** Interval for anything set to {@link NotifyMode#REPEAT}, in seconds. */
+    public int renotifySeconds = 60;
 
     /** Draw the in-tree highlights (target build diff + current upgrade step). */
     public boolean routingOverlay = true;
@@ -142,5 +148,9 @@ public class TreeConfig {
         }
         progressions = rewrapped;
         if (perkLevels == null) perkLevels = new HashMap<>();
+        if (upgradeNotify == null) upgradeNotify = NotifyMode.ONCE;
+        if (adviceNotify == null) adviceNotify = NotifyMode.ONCE;
+        // Older configs used 0 = "once"; ONCE is a mode now, so the interval must be real.
+        if (renotifySeconds <= 0) renotifySeconds = 60;
     }
 }

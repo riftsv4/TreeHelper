@@ -14,3 +14,7 @@ run/
 .project
 # OS
 *.DS_Store
+# Local dev notes (not for the public repo)
+HANDOFF.md
+TREE_STRUCTURE.md
+MODRINTH.md

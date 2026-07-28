@@ -10,6 +10,7 @@ import net.minecraft.client.multiplayer.PlayerInfo;
 import net.minecraft.network.chat.Component;
 
 import java.util.EnumMap;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Locale;
 import java.util.Map;
@@ -59,8 +60,10 @@ public final class PowderTracker {
     private final TreeConfig config;
     /** Formula-vs-tooltip mismatches already logged this session (perk:level), to log once. */
     private final Set<String> loggedCostDrift = new HashSet<>();
-    /** When each powder type's step was last announced, for the re-notify interval. */
+    /** When each powder type's step was last announced, for the repeat interval. */
     private final Map<Progression, Long> lastNotifyMs = new EnumMap<>(Progression.class);
+    /** When each grind advice was last announced (keyed by advice id), for the repeat interval. */
+    private final Map<String, Long> lastAdviceMs = new HashMap<>();
 
     public PowderTracker(TreeConfig config) {
         this.config = config;
@@ -146,10 +149,11 @@ public final class PowderTracker {
                 updateCurrent(Progression.fromArg(m.group(1)), parse(m.group(2)));
             }
         }
-        // Even without balance changes, re-check so the re-notify interval can fire while afk.
+        // Even without balance changes, re-check so the repeat intervals can fire while afk.
         for (Progression p : Progression.values()) {
             if (p.isPowder()) checkAffordable(p);
         }
+        checkGrindAdvice();
     }
 
     // --- state updates + notifications -------------------------------------
@@ -174,32 +178,64 @@ public final class PowderTracker {
     }
 
     /**
-     * Grind-progression advice, fired at the powder milestones (once each, persisted):
-     * total Gemstone ≥ {@link #GEMSTONE_DONE} -> move to Mithril; total Mithril ≥
-     * {@link #MITHRIL_DONE} -> start Glacite. (The HOTM-7 "start Gemstone" advice lives in
-     * {@code HotmScanner.report}, where the tier is learned.) Totals = current + in-tree, so
-     * spending powder on upgrades doesn't push a milestone back out of reach.
+     * Grind-progression advice: HOTM ≥ 7 -> start Gemstone; total Gemstone ≥
+     * {@link #GEMSTONE_DONE} -> move to Mithril; total Mithril ≥ {@link #MITHRIL_DONE} ->
+     * start Glacite. ONCE mode announces each a single time (persisted flags); REPEAT mode
+     * re-reminds every {@code renotifySeconds} until the recommended path is selected. Totals
+     * = current + in-tree, so spending powder can't push a milestone back out of reach.
+     * Runs on every balance update and every tab-list poll.
      */
-    private void checkGrindAdvice() {
-        if (!config.grindAdvice) return;
-        if (!config.advisedMithrilMove && totalPowder(Progression.GEMSTONE) >= GEMSTONE_DONE) {
-            config.advisedMithrilMove = true;
-            config.save();
-            if (config.activePath != Progression.MITHRIL) {
-                ChatUtil.send("You've reached " + fmt(GEMSTONE_DONE) + " Gemstone Powder — we"
-                        + " recommend moving on to the Mithril powder grind (set your Path to"
-                        + " Mithril).", ChatFormatting.GOLD);
+    void checkGrindAdvice() {
+        if (config.adviceNotify == TreeConfig.NotifyMode.OFF) return;
+
+        int tier = config.data(Progression.HOTM).highestUnlockedTier;
+        if (tier >= HotmScanner.MIN_POWDER_TIER) {
+            boolean first = !config.advisedGemstoneStart;
+            if (first) {
+                config.advisedGemstoneStart = true;
+                config.save();
             }
+            maybeAdvise("hotm7", first, Progression.GEMSTONE,
+                    "You've reached HOTM " + tier + " — we recommend starting the Gemstone"
+                            + " powder grind (set your Path to Gemstone).");
         }
-        if (!config.advisedGlaciteStart && totalPowder(Progression.MITHRIL) >= MITHRIL_DONE) {
-            config.advisedGlaciteStart = true;
-            config.save();
-            if (config.activePath != Progression.GLACITE) {
-                ChatUtil.send("You've reached " + fmt(MITHRIL_DONE) + " Mithril Powder — we"
-                        + " recommend starting the Glacite grind (set your Path to Glacite).",
-                        ChatFormatting.GOLD);
+        if (totalPowder(Progression.GEMSTONE) >= GEMSTONE_DONE) {
+            boolean first = !config.advisedMithrilMove;
+            if (first) {
+                config.advisedMithrilMove = true;
+                config.save();
             }
+            maybeAdvise("gemstoneDone", first, Progression.MITHRIL,
+                    "You've reached " + fmt(GEMSTONE_DONE) + " Gemstone Powder — we recommend"
+                            + " moving on to the Mithril powder grind (set your Path to Mithril).");
         }
+        if (totalPowder(Progression.MITHRIL) >= MITHRIL_DONE) {
+            boolean first = !config.advisedGlaciteStart;
+            if (first) {
+                config.advisedGlaciteStart = true;
+                config.save();
+            }
+            maybeAdvise("mithrilDone", first, Progression.GLACITE,
+                    "You've reached " + fmt(MITHRIL_DONE) + " Mithril Powder — we recommend"
+                            + " starting the Glacite grind (set your Path to Glacite).");
+        }
+    }
+
+    /**
+     * Sends one advice message: immediately the first time, then (in REPEAT mode only) again
+     * each time the repeat interval elapses. Always silent while the recommended path is
+     * already the active one — following the advice is what stops the reminders.
+     */
+    private void maybeAdvise(String id, boolean first, Progression recommended, String msg) {
+        if (config.activePath == recommended) return;
+        long now = System.currentTimeMillis();
+        if (!first) {
+            if (config.adviceNotify != TreeConfig.NotifyMode.REPEAT) return;
+            Long last = lastAdviceMs.get(id);
+            if (last != null && now - last < config.renotifySeconds * 1000L) return;
+        }
+        lastAdviceMs.put(id, now);
+        ChatUtil.send(msg, ChatFormatting.GOLD);
     }
 
     /** Current + in-tree powder for a type, or -1 while the balance has never been seen. */
@@ -211,11 +247,11 @@ public final class PowderTracker {
 
     /**
      * Chat ping when the current (spendable) balance covers the full remaining cost of the
-     * next step of the active grind's plan for this powder type. Fires once per step; with
-     * {@code renotifyMinutes > 0} it repeats on that interval while the step stays affordable.
+     * next step of the active grind's plan for this powder type. ONCE mode fires once per
+     * step; REPEAT mode repeats every {@code renotifySeconds} while it stays affordable.
      */
     private void checkAffordable(Progression type) {
-        if (!config.chatNotifications) return;
+        if (config.upgradeNotify == TreeConfig.NotifyMode.OFF) return;
         UpgradePlan.Step next = UpgradePlan.nextStep(config.activePath, type, this::levelOf);
         if (next == null) return;
         if (levelOf(next.perk()) <= 0) return; // perk not unlocked -> no upgrade to announce
@@ -226,10 +262,9 @@ public final class PowderTracker {
 
         boolean firstTime = !next.id().equals(data.notifiedStep);
         if (!firstTime) {
-            int secs = config.renotifySeconds;
-            if (secs <= 0) return;
+            if (config.upgradeNotify != TreeConfig.NotifyMode.REPEAT) return;
             Long last = lastNotifyMs.get(type);
-            if (last != null && System.currentTimeMillis() - last < secs * 1000L) return;
+            if (last != null && System.currentTimeMillis() - last < config.renotifySeconds * 1000L) return;
         }
 
         lastNotifyMs.put(type, System.currentTimeMillis());
