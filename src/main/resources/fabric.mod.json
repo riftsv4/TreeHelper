@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "id": "treehelper",
+  "version": "${version}",
+  "name": "Tree Helper",
+  "description": "Mining progression made simple",
+  "authors": [
+    "zoee"
+  ],
+  "contact": {
+    "sources": "https://github.com/riftsv4/TreeHelper",
+    "issues": "https://github.com/riftsv4/TreeHelper/issues"
+  },
+  "license": "MIT",
+  "icon": "assets/treehelper/icon.png",
+  "environment": "client",
+  "entrypoints": {
+    "client": [
+      "com.zoee.treehelper.TreeHelperClient"
+    ]
+  },
+  "depends": {
+    "fabricloader": ">=0.19.2",
+    "fabric-api": "*",
+    "minecraft": ">=26.1.2",
+    "java": ">=25"
+  }
+}
