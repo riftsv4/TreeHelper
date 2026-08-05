@@ -8,7 +8,7 @@ upgrades — right on the HOTM screen.
 
 ## Installing
 
-Grab the latest jar from **[Modrinth](https://modrinth.com/mod/hotmgrindsavior)** and drop it in your
+Grab the latest jar from **[Modrinth](https://modrinth.com/mod/treehelper)** and drop it in your
 `.minecraft/mods/` folder alongside [Fabric API](https://modrinth.com/mod/fabric-api).
 
 ## Using da mod
@@ -36,7 +36,7 @@ Settings persist in `config/treehelper.json`.
 
 ## Downloading
 
-Most people should just [download from Modrinth](https://modrinth.com/mod/hotmgrindsavior)
+Most people should just [download from Modrinth](https://modrinth.com/mod/treehelper)
 
 If for whatever reason you dont trust Modrinth you can build from the github ig 
 
