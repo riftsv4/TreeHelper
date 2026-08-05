@@ -9,6 +9,8 @@ import com.zoee.treehelper.hotm.PowderTracker;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
+import net.fabricmc.fabric.api.client.message.v1.ClientReceiveMessageEvents;
+import net.minecraft.client.Minecraft;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -32,6 +34,13 @@ public class TreeHelperClient implements ClientModInitializer {
 
         HotmOverlay.register(config, scanner);
         HelperPanel.register(config, tracker, scanner);
+
+        // Automatic HOTM level-up detection: watch chat for Hypixel's "HEART OF THE MOUNTAIN
+        // TIER N" banner so the stored level (and build overlay) update without a re-scan.
+        ClientReceiveMessageEvents.GAME.register((message, overlay) -> {
+            if (overlay) return; // action-bar messages, not chat
+            scanner.onChatMessage(Minecraft.getInstance(), message.getString());
+        });
 
         // Live powder tracking while mining: the tab list shows current balances
         // ("Mithril: 286,166"), so poll it every 2s for the affordability notifications.

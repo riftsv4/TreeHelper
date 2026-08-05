@@ -29,6 +29,13 @@ public class HotmScanner {
 
     private static final String HOTM_TITLE = "Heart of the Mountain";
     private static final Pattern TIER_NAME = Pattern.compile("Tier\\s+(\\d+)");
+    /**
+     * The tier-up banner Hypixel prints in chat, e.g. {@code HEART OF THE MOUNTAIN TIER 6}
+     * (see hotm level up detection.txt for a captured log). Color codes are stripped by the
+     * time we see the message, so this matches the plain text.
+     */
+    private static final Pattern TIER_UP =
+            Pattern.compile("HEART OF THE MOUNTAIN\\s+TIER\\s+(\\d+)", Pattern.CASE_INSENSITIVE);
     /** Powder grinds below this HOTM tier are strongly suboptimal — warn the user. */
     static final int MIN_POWDER_TIER = 7;
     /** How long the visible page must stay unchanged before we trust what we read off it. */
@@ -87,6 +94,32 @@ public class HotmScanner {
         if (guide == GuidePhase.IDLE) return;
         guide = GuidePhase.IDLE;
         ChatUtil.send("Get Data cancelled.", ChatFormatting.YELLOW);
+    }
+
+    /**
+     * Automatic HOTM level-up detection: Hypixel prints a "HEART OF THE MOUNTAIN TIER N" banner
+     * in chat when you tier up, so we bump the stored level (and re-run grind advice) the moment
+     * it appears — the build overlay reads {@code highestUnlockedTier}, so it follows along
+     * without a fresh Get Data scan. Called from the client chat listener.
+     */
+    public void onChatMessage(Minecraft mc, String message) {
+        if (guide != GuidePhase.IDLE) return;   // a Get Data scan already owns the level
+        if (!MenuNav.onHypixel(mc)) return;
+        Matcher m = TIER_UP.matcher(message);
+        if (!m.find()) return;
+
+        int tier = Integer.parseInt(m.group(1));
+        if (tier <= config.data(Progression.HOTM).highestUnlockedTier) return;
+
+        config.data(Progression.HOTM).highestUnlockedTier = tier;
+        config.save();
+
+        ChatUtil.send("HOTM level up detected — you're now Tier " + tier
+                + ". Your recommended build has been updated.", ChatFormatting.AQUA);
+
+        // Re-evaluate grind advice immediately (e.g. reaching Tier 7 -> start Gemstone) rather
+        // than waiting for the next tab poll.
+        powder.checkGrindAdvice();
     }
 
     /**

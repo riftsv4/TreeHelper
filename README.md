@@ -26,6 +26,9 @@ Grab the latest jar from **[Modrinth](https://modrinth.com/mod/hotmgrindsavior)*
 - **Live powder tracking** — balances update from the tab list while you mine, so you get a
   chat ping the moment you can afford the next upgrade. Each notification type can be set to
   Once, Repeat (30s–10m interval), or Off.
+- **Automatic level-up detection** — when Hypixel announces a new Heart of the Mountain tier
+  in chat, your stored HOTM level bumps instantly and the build overlay updates to match — no
+  need to reopen `/hotm` and re-scan.
 - **Grind advice** — one-time recommendations as you progress (reach HOTM 7 → start Gemstone;
   powder milestones → move on to Mithril / Glacite), with the same Once/Repeat/Off control.
 
